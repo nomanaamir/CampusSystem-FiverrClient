@@ -56,9 +56,11 @@ export function logIn(email, password) {
         dispatch({ type: ActionTypes.SIGN_IN_SUCCESS, payload: true })
 
         auth.signInWithEmailAndPassword(email, password).then(ev => {
-            console.log('uid:', ev.user)
-            dispatch(getUserData(ev.user.uid))
-            dispatch({ type: ActionTypes.SIGN_IN_SUCCESS, payload: false })
+            if (ev) {
+                dispatch(getUserData(ev.user.uid))
+                dispatch({ type: ActionTypes.SIGN_IN_SUCCESS, payload: false })
+
+            }
         }).catch(error => {
             dispatch({ type: ActionTypes.SIGN_IN_SUCCESS, payload: false })
             alert(error.message)
@@ -77,24 +79,37 @@ export function signUp(email, password, image, user) {
             // storeData(data)
             console.log('email:', ev.user.email)
             console.log('uid:', ev.user.uid)
-            storage.child(`profile-pictures/${ev.user.uid}`).put(image).then((snap) => {
-                snap.ref.getDownloadURL()
-                    .then((url) => {
-                        console.log('DOWNLOAD_URL: ', url)
-                        database.child(`users/${ev.user.uid}`).set(Object.assign({}, user, { profileImg: url, uid: ev.user.uid })).then(() => {
-                            dispatch(getUserData(ev.user.uid))
-                            dispatch({ type: ActionTypes.SIGN_UP_SUCCESS, payload: false })
+            uploadImageAsync(image, ev.user.uid).then(url => {
+                database.child(`users/${ev.user.uid}`).set(Object.assign({}, user, { profileImg: url, uid: ev.user.uid })).then(() => {
+                    dispatch(getUserData(ev.user.uid))
+                    dispatch({ type: ActionTypes.SIGN_UP_SUCCESS, payload: false })
 
-                        }).catch(error => {
-                            dispatch({ type: ActionTypes.SIGN_UP_SUCCESS, payload: false })
-                            console.log('database error', error)
-                        })
+                }).catch(error => {
+                    dispatch({ type: ActionTypes.SIGN_UP_SUCCESS, payload: false })
+                    console.log('database error', error)
+                })
 
-                    })
-            }).catch(error => {
-                dispatch({ type: ActionTypes.SIGN_UP_SUCCESS, payload: false })
-                console.log('picture upload error', error)
-            })
+                console.log('uploadImageAsync(image, ev.user.uid)', url)
+            }).catch(error => alert('Error on image uploading'))
+
+            // storage.child(`profile-pictures/${ev.user.uid}`).put(image).then((snap) => {
+            //     snap.ref.getDownloadURL()
+            //         .then((url) => {
+            //             console.log('DOWNLOAD_URL: ', url)
+            //             database.child(`users/${ev.user.uid}`).set(Object.assign({}, user, { profileImg: url, uid: ev.user.uid })).then(() => {
+            //                 dispatch(getUserData(ev.user.uid))
+            //                 dispatch({ type: ActionTypes.SIGN_UP_SUCCESS, payload: false })
+
+            //             }).catch(error => {
+            //                 dispatch({ type: ActionTypes.SIGN_UP_SUCCESS, payload: false })
+            //                 console.log('database error', error)
+            //             })
+
+            //         })
+            // }).catch(error => {
+            //     dispatch({ type: ActionTypes.SIGN_UP_SUCCESS, payload: false })
+            //     console.log('picture upload error', error)
+            // })
 
         }).catch(error => {
             alert(error.message)
@@ -112,7 +127,18 @@ export function getUserData(uid) {
         database.child(`users/${uid}`).on('value', ev => {
             console.log('ev.val()', ev.val())
             storeData(ev.val())
+            dispatch(retrieveDataAssyncStorage())
+            dispatch(getUserSkills())
             redirect.navigate('profile')
+        })
+    }
+}
+
+export function getUserSkills() {
+    return dispatch => {
+        database.child('skills').on('value', ev => {
+            console.log('skills get', ev.val())
+            dispatch({ type: ActionTypes.GET_SKILLS_SUCCESS, payload: ev.val() })
         })
     }
 }
@@ -126,4 +152,32 @@ export function logOut() {
             })
         })
     }
+}
+async function uploadImageAsync(uri, uid) {
+    const blob = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = function () {
+            resolve(xhr.response); // when BlobModule finishes reading, resolve with the blob
+        };
+        xhr.onerror = function () {
+            reject(new TypeError('Network request failed')); // error occurred, rejecting
+        };
+        xhr.responseType = 'blob'; // use BlobModule's UriHandler
+        xhr.open('GET', uri, true); // fetch the blob from uri in async mode
+        xhr.send(null); // no initial data
+    });
+
+    // do something with the blob, eg. upload it to firebase (API v5.6.0 below)
+    const ref = firebase
+        .storage()
+        .ref()
+        .child(`profile-pictures/${uid}`);
+    const snapshot = await ref.put(blob);
+    const remoteUri = await snapshot.ref.getDownloadURL();
+
+    // when we're done sending it, close and release the blob
+    blob.close();
+
+    // return the result, eg. remote URI to the image
+    return remoteUri;
 }

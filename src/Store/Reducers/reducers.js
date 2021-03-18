@@ -8,6 +8,8 @@ const InitialState = {
     navigation_props: {},
     async_storage_data: {},
 
+    user_skills: {},
+
     signUp_success: false
 }
 export default (state = InitialState, action) => {
@@ -22,6 +24,9 @@ export default (state = InitialState, action) => {
             return ({ ...state, async_storage_data: action.payload });
         case ActionTypes.SIGN_UP_SUCCESS:
             return ({ ...state, signUp_success: action.payload });
+        case ActionTypes.GET_SKILLS_SUCCESS:
+            return ({ ...state, user_skills: action.payload });
+
 
         default:
             return state;
